@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Neon Surge: Arcade</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0b0c10;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #ffffff;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 100%;
+      max-height: 850px;
+      background: linear-gradient(180deg, #0b0c10 0%, #1f2833 100%);
+      box-shadow: 0 0 30px rgba(0, 238, 255, 0.15);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: pointer;
+    }
+
+    .overlay-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      text-align: center;
+      background: rgba(11, 12, 16, 0.88);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      transition: opacity 0.3s ease;
+    }
+
+    .hidden {
+      display: none !important;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+      text-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+    }
+
+    .tagline {
+      font-size: 1rem;
+      color: #c5c6c7;
+      margin-bottom: 24px;
+      line-height: 1.4;
+      max-width: 300px;
+    }
+
+    .stat-badge {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 1.1rem;
+      color: #66fcf1;
+      margin-bottom: 24px;
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      color: #0b0c10;
+      font-size: 1.25rem;
+      font-weight: 700;
+      padding: 16px 40px;
+      border: none;
+      border-radius: 30px;
+      box-shadow: 0 8px 20px rgba(0, 242, 254, 0.35);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      outline: none;
+    }
+
+    .btn-action:active {
+      transform: scale(0.96);
+      box-shadow: 0 4px 10px rgba(0, 242, 254, 0.2);
+    }
+
+    /* HUD elements */
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .hud-box {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hud-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #c5c6c7;
+    }
+
+    .hud-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .timer-critical {
+      color: #ff4757 !important;
+      animation: pulse 0.5s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.1); }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <!-- HUD Layer -->
+    <div id="hud">
+      <div class="hud-box">
+        <span class="hud-label">Score</span>
+        <span id="score-val" class="hud-value">0</span>
+      </div>
+      <div class="hud-box" style="text-align: center;">
+        <span class="hud-label">Time</span>
+        <span id="timer-val" class="hud-value" style="color: #66fcf1;">60</span>
+      </div>
+      <div class="hud-box" style="text-align: right;">
+        <span class="hud-label">High</span>
+        <span id="high-val" class="hud-value">0</span>
+      </div>
+    </div>
+
+    <!-- Main Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Start Overlay -->
+    <div id="start-screen" class="overlay-screen">
+      <h1>NEON SURGE</h1>
+      <p class="tagline">Tap neon orbs before they vanish! Avoid red bombs. You have 60 seconds.</p>
+      <div class="stat-badge">BEST: <span id="start-high">0</span></div>
+      <button id="start-btn" class="btn-action">TAP TO PLAY</button>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="game-over-screen" class="overlay-screen hidden">
+      <h1 style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); -webkit-background-clip: text;">TIME'S UP!</h1>
+      <p class="tagline" id="game-over-summary">You scored 0 points!</p>
+      <div class="stat-badge">HIGH SCORE: <span id="end-high">0</span></div>
+      <button id="restart-btn" class="btn-action">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    // --- Audio Synthesizer (Web Audio API) ---
+    class SoundFX {
+      constructor() {
+        this.ctx = null;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playPop(freq = 440, duration = 0.08) {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.8, this.ctx.currentTime + duration);
+        
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+      }
+
+      playBomb() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.3);
+
+        gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+      }
+
+      playEnd() {
+        if (!this.ctx) return;
+        [261.63, 329.63, 392.00, 523.25].forEach((freq, idx) => {
+          setTimeout(() => this.playPop(freq, 0.15), idx * 100);
+        });
+      }
+    }
+
+    const sfx = new SoundFX();
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('game-container');
+
+    // UI elements
+    const scoreValEl = document.getElementById('score-val');
+    const timerValEl = document.getElementById('timer-val');
+    const highValEl = document.getElementById('high-val');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const startHighEl = document.getElementById('start-high');
+    const endHighEl = document.getElementById('end-high');
+    const summaryEl = document.getElementById('game-over-summary');
+    const startBtn = document.getElementById('start-btn');
+    const restartBtn = document.getElementById('restart-btn');
+
+    // Game state
+    let width = 0;
+    let height = 0;
+    let score = 0;
+    let highScore = localStorage.getItem('neon_surge_high') || 0;
+    let timeLeft = 60;
+    let gameState = 'START'; // START, PLAYING, GAMEOVER
+    let timerInterval = null;
+    let lastSpawnTime = 0;
+    let spawnRate = 600; // ms between spawns
+
+    let targets = [];
+    let particles = [];
+    let floatingTexts = [];
+
+    // Target colors configuration
+    const TARGET_TYPES = [
+      { type: 'NORMAL', color: '#00f2fe', points: 10, radius: 28, speed: 2 },
+      { type: 'GOLD', color: '#f1c40f', points: 30, radius: 22, speed: 3.2 },
+      { type: 'BOMB', color: '#ff4757', points: -20, radius: 26, speed: 2.5 }
+    ];
+
+    function resizeCanvas() {
+      const rect = container.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Initialize High Scores
+    startHighEl.textContent = highScore;
+    highValEl.textContent = highScore;
+
+    class Target {
+      constructor() {
+        const isBomb = Math.random() < 0.22;
+        const isGold = !isBomb && Math.random() < 0.25;
+        const typeConfig = isBomb ? TARGET_TYPES[2] : (isGold ? TARGET_TYPES[1] : TARGET_TYPES[0]);
+
+        this.type = typeConfig.type;
+        this.color = typeConfig.color;
+        this.points = typeConfig.points;
+        this.radius = typeConfig.radius;
+        this.x = this.radius + Math.random() * (width - this.radius * 2);
+        this.y = -this.radius;
+        this.speed = typeConfig.speed + Math.random() * 1.2;
+        this.pulse = 0;
+      }
+
+      update() {
+        this.y += this.speed;
+        this.pulse += 0.08;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 12;
+
+        ctx.beginPath();
+        const pulseRadius = this.radius + Math.sin(this.pulse) * 2;
+        ctx.arc(this.x, this.y, Math.max(1, pulseRadius), 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+
+        // Inner glowing core
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, Math.max(1, pulseRadius * 0.4), 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.radius = Math.random() * 3 + 2;
+        this.vx = (Math.random() - 0.5) * 8;
+        this.vy = (Math.random() - 0.5) * 8;
+        this.alpha = 1;
+        this.decay = Math.random() * 0.03 + 0.02;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= this.decay;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    class FloatingText {
+      constructor(x, y, text, color) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.alpha = 1;
+        this.vy = -2;
+      }
+
+      update() {
+        this.y += this.vy;
+        this.alpha -= 0.025;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.font = 'bold 20px -apple-system, sans-serif';
+        ctx.fillStyle = this.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    function createExplosion(x, y, color) {
+      for (let i = 0; i < 14; i++) {
+        particles.push(new Particle(x, y, color));
+      }
+    }
+
+    function handleTap(e) {
+      if (gameState !== 'PLAYING') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const touchX = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+      const touchY = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        const dist = Math.hypot(t.x - touchX, t.y - touchY);
+
+        // Tap hit box tolerance adjustment for touch screen friendliness
+        if (dist < t.radius + 15) {
+          score += t.points;
+          if (score < 0) score = 0;
+          scoreValEl.textContent = score;
+
+          createExplosion(t.x, t.y, t.color);
+
+          if (t.type === 'BOMB') {
+            sfx.playBomb();
+            floatingTexts.push(new FloatingText(t.x, t.y, `${t.points}`, '#ff4757'));
+          } else {
+            sfx.playPop(t.type === 'GOLD' ? 650 : 440);
+            floatingTexts.push(new FloatingText(t.x, t.y, `+${t.points}`, t.color));
+          }
+
+          targets.splice(i, 1);
+          break;
+        }
+      }
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      sfx.init();
+      handleTap(e);
+    });
+
+    function startGame() {
+      sfx.init();
+      score = 0;
+      timeLeft = 60;
+      targets = [];
+      particles = [];
+      floatingTexts = [];
+      spawnRate = 600;
+
+      scoreValEl.textContent = '0';
+      timerValEl.textContent = '60';
+      timerValEl.classList.remove('timer-critical');
+
+      startScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+      gameState = 'PLAYING';
+
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        timerValEl.textContent = timeLeft;
+
+        if (timeLeft <= 10) {
+          timerValEl.classList.add('timer-critical');
+        }
+
+        // Increase difficulty slightly over time
+        if (timeLeft % 10 === 0 && spawnRate > 300) {
+          spawnRate -= 50;
+        }
+
+        if (timeLeft <= 0) {
+          endGame();
+        }
+      }, 1000);
+    }
+
+    function endGame() {
+      gameState = 'GAMEOVER';
+      clearInterval(timerInterval);
+      sfx.playEnd();
+
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neon_surge_high', highScore);
+      }
+
+      highValEl.textContent = highScore;
+      startHighEl.textContent = highScore;
+      endHighEl.textContent = highScore;
+
+      summaryEl.textContent = `You scored ${score} points!`;
+      gameOverScreen.classList.remove('hidden');
+    }
+
+    function update(timestamp) {
+      ctx.clearRect(0, 0, width, height);
+
+      if (gameState === 'PLAYING') {
+        // Spawn targets
+        if (timestamp - lastSpawnTime > spawnRate) {
+          targets.push(new Target());
+          lastSpawnTime = timestamp;
+        }
+
+        // Update targets
+        for (let i = targets.length - 1; i >= 0; i--) {
+          const t = targets[i];
+          t.update();
+          t.draw();
+
+          // Remove targets that go off-screen
+          if (t.y - t.radius > height) {
+            targets.splice(i, 1);
+          }
+        }
+      }
+
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw();
+        if (p.alpha <= 0) particles.splice(i, 1);
+      }
+
+      // Update floating score texts
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.update();
+        ft.draw();
+        if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    // Event listeners
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+
+    // Run animation loop
+    requestAnimationFrame(update);
+  </script>
+</body>
+</html>
