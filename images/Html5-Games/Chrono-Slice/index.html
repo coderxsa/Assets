@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Chrono-Slice: Cosmic Surge</title>
+    <!-- Tailwind CSS for clean UI layout overlay -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for high-performance 3D graphics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Font for futuristic vibe -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0b0c10;
+            font-family: 'Orbitron', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .text-glow-cyan {
+            text-shadow: 0 0 10px #00f3ff, 0 0 20px #00f3ff, 0 0 40px #00f3ff;
+        }
+        .text-glow-magenta {
+            text-shadow: 0 0 10px #ff007f, 0 0 20px #ff007f, 0 0 40px #ff007f;
+        }
+        .text-glow-gold {
+            text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700;
+        }
+        .box-glow {
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4), inset 0 0 15px rgba(0, 243, 255, 0.2);
+            border: 1px solid #00f3ff;
+        }
+        .fever-active {
+            animation: feverPulse 0.5s infinite alternate;
+        }
+        @keyframes feverPulse {
+            0% { filter: hue-rotate(0deg) contrast(1.2); }
+            100% { filter: hue-rotate(180deg) contrast(1.8) brightness(1.2); }
+        }
+    </style>
+</head>
+<body class="relative">
+
+    <div id="game-ui" class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 md:p-6">
+        
+        <!-- Header: Timer & High Score -->
+        <div class="flex justify-between items-start w-full max-w-4xl mx-auto">
+            <!-- Combo Display Left -->
+            <div class="flex flex-col items-start">
+                <div class="text-xs uppercase tracking-widest text-cyan-300 font-semibold">Multiplier</div>
+                <div id="combo-display" class="text-4xl md:text-6xl font-black text-glow-cyan text-cyan-400 italic transition-transform duration-100">x1</div>
+                <div id="combo-sub" class="text-xs text-pink-400 font-bold opacity-0 transition-opacity">SPEED BOOST!</div>
+            </div>
+
+            <!-- Timer Center -->
+            <div class="flex flex-col items-center">
+                <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-1">Time Remaining</div>
+                <div id="timer-display" class="text-5xl md:text-7xl font-black text-glow-cyan text-cyan-300 tracking-wider">00:60</div>
+                <div id="fever-badge" class="hidden mt-1 px-3 py-0.5 bg-gradient-to-r from-pink-600 to-purple-600 rounded-full text-white text-xs font-black tracking-widest animate-bounce">
+                    FEVER MODE! (2x SCORE)
+                </div>
+            </div>
+
+            <!-- Score Right -->
+            <div class="flex flex-col items-end">
+                <div class="text-xs uppercase tracking-widest text-pink-300 font-semibold">Score</div>
+                <div id="score-display" class="text-3xl md:text-5xl font-black text-glow-magenta text-pink-500">0</div>
+                <div class="text-xs text-gray-400 mt-1">BEST: <span id="best-score" class="text-yellow-400">0</span></div>
+            </div>
+        </div>
+
+        <!-- Near Miss Floating Announcement -->
+        <div id="announcer" class="self-center text-2xl md:text-4xl font-black text-glow-gold text-yellow-300 opacity-0 transition-all transform scale-50 pointer-events-none">
+            NEAR MISS! +2s
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <div class="w-full max-w-md mx-auto flex flex-col items-center">
+            <!-- Fever Progress Gauge -->
+            <div class="w-full bg-gray-900/80 rounded-full h-3 border border-cyan-500/30 overflow-hidden mb-2 p-0.5">
+                <div id="fever-bar" class="bg-gradient-to-r from-cyan-400 via-pink-500 to-yellow-400 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <div class="text-[10px] tracking-widest text-cyan-200/70 uppercase">Swipe or drag to slice cosmic objects</div>
+        </div>
+    </div>
+
+    <div id="overlay" class="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div class="max-w-md w-full bg-slate-900/90 box-glow rounded-2xl p-6 md:p-8 text-center flex flex-col items-center">
+            <h1 class="text-3xl md:text-5xl font-black italic tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-yellow-400 mb-2">
+                CHRONO-SLICE
+            </h1>
+            <div class="text-xs font-bold tracking-widest text-cyan-300 uppercase mb-6">Cosmic Surge</div>
+
+            <div id="start-screen" class="w-full flex flex-col items-center">
+                <p class="text-gray-300 text-sm mb-6 leading-relaxed">
+                    Slice glowing crystal orbs, neon asteroids, and temporal gears before time expires! Chain slices to surge your multiplier and hit <span class="text-pink-400 font-bold">Fever Mode</span> at 45s.
+                </p>
+                <button id="start-btn" class="pointer-events-auto w-full py-4 bg-gradient-to-r from-cyan-500 to-pink-600 rounded-xl font-black text-lg text-white shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all uppercase tracking-wider">
+                    Initiate Surge
+                </button>
+            </div>
+
+            <div id="gameover-screen" class="w-full flex flex-col items-center hidden">
+                <div class="text-2xl font-bold text-pink-500 mb-1">RUN COMPLETE!</div>
+                <div class="text-gray-400 text-xs uppercase mb-4">60-Second Challenge Ended</div>
+
+                <div class="grid grid-cols-2 gap-4 w-full mb-6">
+                    <div class="bg-slate-800/80 p-3 rounded-lg border border-cyan-500/20">
+                        <div class="text-[10px] text-gray-400 uppercase">Final Score</div>
+                        <div id="final-score" class="text-2xl font-black text-cyan-400">0</div>
+                    </div>
+                    <div class="bg-slate-800/80 p-3 rounded-lg border border-pink-500/20">
+                        <div class="text-[10px] text-gray-400 uppercase">Max Combo</div>
+                        <div id="final-combo" class="text-2xl font-black text-pink-400">0x</div>
+                    </div>
+                </div>
+
+                <button id="restart-btn" class="pointer-events-auto w-full py-4 bg-gradient-to-r from-cyan-500 to-pink-600 rounded-xl font-black text-lg text-white shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all uppercase tracking-wider">
+                    One More Try
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.isMuted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            // Play slice synth note based on current combo count
+            playSliceSound(comboCount = 1) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                // Musical pitch scale based on combo (Pentatonic scale progression)
+                const baseFreq = 220; // A3
+                const scale = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+                const noteIndex = Math.min(comboCount - 1, scale.length - 1);
+                const semitones = scale[noteIndex];
+                const freq = baseFreq * Math.pow(2, semitones / 12);
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(freq * 1.5, this.ctx.currentTime + 0.12);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            // Explosion/Hit sound for bombs or objects passing
+            playExplosionSound(isFever = false) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(isFever ? 150 : 80, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.3);
+
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+        }
+
+        const audio = new AudioEngine();
+        
+        let scene, camera, renderer;
+        let objects = [];
+        let particles = [];
+        let sliceTrailPoints = [];
+        let sliceLineMesh;
+        
+        let isPlaying = false;
+        let gameTime = 60.0;
+        let score = 0;
+        let combo = 1;
+        let maxCombo = 1;
+        let bestScore = localStorage.getItem('chrono_slice_best') || 0;
+        
+        let feverMode = false;
+        let feverProgress = 0;
+        let speedMultiplier = 1.0;
+        let spawnInterval = 0.8;
+        let lastSpawnTime = 0;
+        let clock = new THREE.Clock();
+
+        // Raycasting and touch interactions
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(-999, -999);
+        const prevMouse = new THREE.Vector2(-999, -999);
+        let isSwiping = false;
+
+        // Colors
+        const COLOR_CYAN = 0x00f3ff;
+        const COLOR_MAGENTA = 0xff007f;
+        const COLOR_GOLD = 0xffd700;
+        const COLOR_PURPLE = 0x9d00ff;
+
+        document.getElementById('best-score').innerText = bestScore;
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0b0c10, 0.035);
+
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 12);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setClearColor(0x0b0c10);
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(COLOR_CYAN, 2, 30);
+            pointLight.position.set(0, 0, 10);
+            scene.add(pointLight);
+
+            const pointLight2 = new THREE.PointLight(COLOR_MAGENTA, 2, 30);
+            pointLight2.position.set(0, 0, -10);
+            scene.add(pointLight2);
+
+            // Create Cyberpunk Synth Grid Background
+            createGridBackground();
+
+            // Create Slicing Laser Trail Mesh
+            createSliceTrailMesh();
+
+            // Setup Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            setupInputListeners();
+        }
+
+        function createGridBackground() {
+            const gridHelper = new THREE.GridHelper(100, 40, COLOR_CYAN, 0x1f293d);
+            gridHelper.position.y = -8;
+            gridHelper.position.z = -20;
+            scene.add(gridHelper);
+
+            // Floating star/dust particles
+            const particleGeo = new THREE.BufferGeometry();
+            const count = 300;
+            const posArray = new Float32Array(count * 3);
+
+            for (let i = 0; i < count * 3; i += 3) {
+                posArray[i] = (Math.random() - 0.5) * 40;
+                posArray[i + 1] = (Math.random() - 0.5) * 40;
+                posArray[i + 2] = (Math.random() - 0.5) * 60 - 20;
+            }
+
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const particleMat = new THREE.PointsMaterial({
+                size: 0.15,
+                color: COLOR_CYAN,
+                transparent: true,
+                opacity: 0.6
+            });
+            const starField = new THREE.Points(particleGeo, particleMat);
+            scene.add(starField);
+        }
+
+        function createSliceTrailMesh() {
+            const maxPoints = 20;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(maxPoints * 3);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const material = new THREE.LineBasicMaterial({
+                color: COLOR_CYAN,
+                linewidth: 4,
+                transparent: true,
+                opacity: 0.9
+            });
+
+            sliceLineMesh = new THREE.Line(geometry, material);
+            scene.add(sliceLineMesh);
+        }
+
+        function updateSliceTrail(worldPos) {
+            sliceTrailPoints.push(worldPos.clone());
+            if (sliceTrailPoints.length > 12) {
+                sliceTrailPoints.shift();
+            }
+
+            const positions = sliceLineMesh.geometry.attributes.position.array;
+            for (let i = 0; i < sliceTrailPoints.length; i++) {
+                positions[i * 3] = sliceTrailPoints[i].x;
+                positions[i * 3 + 1] = sliceTrailPoints[i].y;
+                positions[i * 3 + 2] = sliceTrailPoints[i].z;
+            }
+            sliceLineMesh.geometry.setDrawRange(0, sliceTrailPoints.length);
+            sliceLineMesh.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function spawnCosmicObject() {
+            const types = ['orb', 'asteroid', 'gear'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            let geometry, material;
+            let color = COLOR_CYAN;
+
+            if (type === 'orb') {
+                geometry = new THREE.IcosahedronGeometry(1.2, 2);
+                color = Math.random() > 0.3 ? COLOR_CYAN : COLOR_GOLD;
+                material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.6,
+                    wireframe: true,
+                    shininess: 100
+                });
+            } else if (type === 'asteroid') {
+                geometry = new THREE.DodecahedronGeometry(1.4, 1);
+                color = COLOR_MAGENTA;
+                material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    roughness: 0.3,
+                    metalness: 0.8,
+                    wireframe: false
+                });
+            } else { // gear
+                geometry = new THREE.TorusGeometry(1.1, 0.3, 12, 24);
+                color = COLOR_PURPLE;
+                material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.4,
+                    flatShading: true
+                });
+            }
+
+            const mesh = new THREE.Mesh(geometry, material);
+
+            // Position at back of perspective, fly towards camera
+            const spawnX = (Math.random() - 0.5) * 12;
+            const spawnY = (Math.random() - 0.5) * 8;
+            mesh.position.set(spawnX, spawnY, -35);
+
+            // Target velocity towards camera
+            const speed = (18 + (60 - gameTime) * 0.3) * speedMultiplier;
+            mesh.userData = {
+                type: type,
+                color: color,
+                vx: (Math.random() - 0.5) * 1.5,
+                vy: (Math.random() - 0.5) * 1.5,
+                vz: speed,
+                rotX: (Math.random() - 0.5) * 0.05,
+                rotY: (Math.random() - 0.5) * 0.05,
+                sliced: false,
+                nearMissChecked: false
+            };
+
+            scene.add(mesh);
+            objects.push(mesh);
+        }
+
+        function createExplosion(pos, color) {
+            const count = 25;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const velocities = [];
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = pos.x;
+                positions[i * 3 + 1] = pos.y;
+                positions[i * 3 + 2] = pos.z;
+
+                velocities.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 12,
+                    (Math.random() - 0.5) * 12,
+                    (Math.random() - 0.5) * 12
+                ));
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.PointsMaterial({
+                size: 0.25,
+                color: color,
+                transparent: true,
+                opacity: 1
+            });
+
+            const pSystem = new THREE.Points(geometry, material);
+            pSystem.userData = { velocities: velocities, life: 1.0 };
+            scene.add(pSystem);
+            particles.push(pSystem);
+        }
+
+        function setupInputListeners() {
+            const onPointerMove = (e) => {
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                prevMouse.copy(mouse);
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+                if (isPlaying && isSwiping) {
+                    performSlice();
+                }
+            };
+
+            const onPointerDown = (e) => {
+                isSwiping = true;
+                onPointerMove(e);
+            };
+
+            const onPointerUp = () => {
+                isSwiping = false;
+                sliceTrailPoints = [];
+            };
+
+            window.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mousedown', onPointerDown);
+            window.addEventListener('mouseup', onPointerUp);
+
+            window.addEventListener('touchmove', onPointerMove);
+            window.addEventListener('touchstart', onPointerDown);
+            window.addEventListener('touchend', onPointerUp);
+
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', startGame);
+        }
+
+        function performSlice() {
+            // Convert mouse to 3D world space position
+            raycaster.setFromCamera(mouse, camera);
+            const planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+            const worldPos = new THREE.Vector3();
+            raycaster.ray.intersectPlane(planeZ, worldPos);
+
+            updateSliceTrail(worldPos);
+
+            // Check collision against active flying objects
+            for (let i = objects.length - 1; i >= 0; i--) {
+                const obj = objects[i];
+                if (obj.userData.sliced) continue;
+
+                const dist = worldPos.distanceTo(obj.position);
+                if (dist < 1.8) {
+                    // Object Sliced Successfully!
+                    obj.userData.sliced = true;
+                    createExplosion(obj.position, obj.userData.color);
+
+                    // Score calculation
+                    const multiplier = feverMode ? combo * 2 : combo;
+                    const addedScore = 100 * multiplier;
+                    score += addedScore;
+
+                    // Increase Combo
+                    combo++;
+                    if (combo > maxCombo) maxCombo = combo;
+
+                    // Audio Feedback
+                    audio.playSliceSound(combo);
+
+                    // Visual UI Pulse & Feedback
+                    updateUI();
+                    triggerScreenShake();
+
+                    // Fever Progress Fill
+                    feverProgress = Math.min(100, feverProgress + 8);
+                    document.getElementById('fever-bar').style.width = feverProgress + '%';
+
+                    // Remove sliced object mesh
+                    scene.remove(obj);
+                    objects.splice(i, 1);
+                }
+            }
+        }
+
+        function triggerNearMiss(obj) {
+            audio.playExplosionSound(true);
+            gameTime = Math.min(60, gameTime + 2.0); // Grant +2 seconds bonus time
+
+            const announcer = document.getElementById('announcer');
+            announcer.innerText = 'NEAR MISS! +2s';
+            announcer.style.opacity = '1';
+            announcer.style.transform = 'scale(1.2)';
+
+            setTimeout(() => {
+                announcer.style.opacity = '0';
+                announcer.style.transform = 'scale(0.5)';
+            }, 800);
+        }
+
+        function triggerScreenShake() {
+            camera.position.x = (Math.random() - 0.5) * 0.4;
+            camera.position.y = (Math.random() - 0.5) * 0.4;
+            setTimeout(() => {
+                camera.position.set(0, 0, 12);
+            }, 50);
+        }
+
+        function updateUI() {
+            document.getElementById('score-display').innerText = score;
+            document.getElementById('combo-display').innerText = `x${combo}`;
+
+            const comboSub = document.getElementById('combo-sub');
+            if (combo > 5) {
+                comboSub.style.opacity = '1';
+            } else {
+                comboSub.style.opacity = '0';
+            }
+        }
+
+        function startGame() {
+            audio.init();
+
+            // Reset Game State
+            score = 0;
+            combo = 1;
+            maxCombo = 1;
+            gameTime = 60.0;
+            feverMode = false;
+            feverProgress = 0;
+            speedMultiplier = 1.0;
+
+            // Clear Scene Objects
+            for (let obj of objects) scene.remove(obj);
+            for (let p of particles) scene.remove(p);
+            objects = [];
+            particles = [];
+
+            // Reset UI
+            updateUI();
+            document.getElementById('fever-bar').style.width = '0%';
+            document.getElementById('game-ui').classList.remove('fever-active');
+            document.getElementById('fever-badge').classList.add('hidden');
+            document.getElementById('overlay').classList.add('hidden');
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('gameover-screen').classList.add('hidden');
+
+            isPlaying = true;
+            clock.start();
+        }
+
+        function gameOver() {
+            isPlaying = false;
+
+            if (score > bestScore) {
+                bestScore = score;
+                localStorage.setItem('chrono_slice_best', bestScore);
+                document.getElementById('best-score').innerText = bestScore;
+            }
+
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('final-combo').innerText = `${maxCombo}x`;
+
+            document.getElementById('overlay').classList.remove('hidden');
+            document.getElementById('gameover-screen').classList.remove('hidden');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            if (isPlaying) {
+                // Countdown Timer Update
+                gameTime -= delta;
+                if (gameTime <= 0) {
+                    gameTime = 0;
+                    gameOver();
+                }
+
+                const seconds = Math.ceil(gameTime);
+                document.getElementById('timer-display').innerText = `00:${seconds < 10 ? '0' : ''}${seconds}`;
+
+                // Escalating Intensity: Speed increases every 10s
+                speedMultiplier = 1.0 + (60 - gameTime) / 30;
+
+                // Fever Mode Trigger at 45 seconds elapsed (15s remaining)
+                if (gameTime <= 15.0 && !feverMode) {
+                    feverMode = true;
+                    document.getElementById('game-ui').classList.add('fever-active');
+                    document.getElementById('fever-badge').classList.remove('hidden');
+                }
+
+                // Spawning Mechanics
+                if (clock.getElapsedTime() - lastSpawnTime > spawnInterval / speedMultiplier) {
+                    spawnCosmicObject();
+                    lastSpawnTime = clock.getElapsedTime();
+                }
+
+                // Update Flying Objects
+                for (let i = objects.length - 1; i >= 0; i--) {
+                    const obj = objects[i];
+                    obj.position.z += obj.userData.vz * delta;
+                    obj.position.x += obj.userData.vx * delta;
+                    obj.position.y += obj.userData.vy * delta;
+
+                    obj.rotation.x += obj.userData.rotX;
+                    obj.rotation.y += obj.userData.rotY;
+
+                    // Near-Miss Detection (close to camera z = 8..11)
+                    if (!obj.userData.nearMissChecked && obj.position.z > 8.5 && obj.position.z < 11.0) {
+                        const distToCam = Math.sqrt(obj.position.x * obj.position.x + obj.position.y * obj.position.y);
+                        if (distToCam < 2.5) {
+                            obj.userData.nearMissChecked = true;
+                            triggerNearMiss(obj);
+                        }
+                    }
+
+                    // Object passed camera without slicing (Reset combo)
+                    if (obj.position.z > 14) {
+                        if (!obj.userData.sliced) {
+                            combo = 1; // Break combo on miss
+                            updateUI();
+                        }
+                        scene.remove(obj);
+                        objects.splice(i, 1);
+                    }
+                }
+
+                // Update Particle Systems
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const pSystem = particles[i];
+                    const positions = pSystem.geometry.attributes.position.array;
+                    const vels = pSystem.userData.velocities;
+
+                    pSystem.userData.life -= delta * 2.0;
+
+                    for (let j = 0; j < vels.length; j++) {
+                        positions[j * 3] += vels[j].x * delta;
+                        positions[j * 3 + 1] += vels[j].y * delta;
+                        positions[j * 3 + 2] += vels[j].z * delta;
+                    }
+
+                    pSystem.geometry.attributes.position.needsUpdate = true;
+                    pSystem.material.opacity = pSystem.userData.life;
+
+                    if (pSystem.userData.life <= 0) {
+                        scene.remove(pSystem);
+                        particles.splice(i, 1);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.onload = function () {
+            initScene();
+            animate();
+        };
+    </script>
+</body>
+</html>
